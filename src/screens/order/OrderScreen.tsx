@@ -12,9 +12,10 @@ import {
 } from "react-native";
 import { OrderCard } from "./components/OrderCard";
 import Ionicons from "react-native-vector-icons/Ionicons";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API } from "../../services/login";
+import socket from "../../socket/socket";
 
 const { width, height } = Dimensions.get("window");
 const PARTICLE_COUNT = 40;
@@ -78,9 +79,11 @@ export default function OrdersScreen() {
   const fetchOrders = async () => {
     try {
       const token = await AsyncStorage.getItem("token");
+
       const res = await API.get("/orders", {
         headers: { Authorization: `Bearer ${token}` },
       });
+
       if (res.data.success) {
         setOrders(res.data.data);
         setFilteredOrders(res.data.data);
@@ -90,8 +93,27 @@ export default function OrdersScreen() {
     }
   };
 
+useEffect(() => {
+  const handleNewOrder = (newOrder: any) => {
+    setOrders(prev => [newOrder, ...prev]);
+  };
+
+  socket.on("orderCreated", handleNewOrder);
+
+  return () => {
+    socket.off("orderCreated", handleNewOrder);
+  };
+}, []);
+
+useFocusEffect(
+  React.useCallback(() => {
+    fetchOrders();
+  }, [])
+);
+
+
   const handleAddOrder = () => {
-    navigation.navigate("AddOrder", { refreshOrders: fetchOrders });
+    navigation.navigate("AddOrder");
   };
 
   return (
