@@ -1,6 +1,10 @@
 {
-  "extends": "@react-native/typescript-config/tsconfig.json"
-      "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true
-
+  "extends": "@react-native/typescript-config/tsconfig.json",
+    "allowSyntheticDefaultImports": true,
+  "compilerOptions": {
+    "jsx": "react",
+    "strict": true,
+    "esModuleInterop": true
+  },
+  "include": ["src", "src/types"]
 }

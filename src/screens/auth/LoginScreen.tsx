@@ -16,6 +16,10 @@ import {
 } from "react-native";
 import LinearGradient from "react-native-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
+import { API } from "../../services/login";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getUserById } from "../../services/userServices";
+
 
 const { width, height } = Dimensions.get("window");
 const PARTICLE_COUNT = 20;
@@ -80,21 +84,50 @@ export default function UltraLuxuryLoginScreen() {
   const handleLogin = async () => {
     setError("");
     setIsLoading(true);
+
     if (!username || !password) {
       setError("Please enter both username and password");
       setIsLoading(false);
       return;
     }
-    try {
-      if (username === "admin" && password === "admin@123") {
-        console.log("Login success: navigating to Dashboard");
-        navigation.navigate("order");
 
-      } else {
-        setError("Invalid username or password");
+    try {
+      // --- Login API call ---
+      const response = await API.post("/auth/login", {
+        username,
+        password,
+      });
+
+
+      if (response.data.success) {
+
+
+        const token = response.data.token;
+        const userId = response.data.user.user_id;
+
+        await AsyncStorage.setItem("token", token);
+        await AsyncStorage.setItem("userId", userId);
+
+
+        // --- Fetch full user details with token ---
+        const userRes = await getUserById(userId, token); // <-- pass token here
+
+
+        if (userRes?.data?.success) {
+          const u = userRes.data.data;
+          await AsyncStorage.setItem("user", JSON.stringify(u));
+        }
+
+        navigation.navigate("Welcome");
       }
-    } catch (err) {
-      setError("Something went wrong. Please try again.");
+      else {
+        setError(response.data.message || "Login failed");
+      }
+    } catch (err: any) {
+      console.log("Login API error:", err || err.message);
+      setError(
+        err.response?.data?.message || "Something went wrong. Please try again."
+      );
     } finally {
       setIsLoading(false);
     }
