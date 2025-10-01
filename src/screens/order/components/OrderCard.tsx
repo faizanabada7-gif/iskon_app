@@ -7,7 +7,7 @@ import {
   ScrollView,
   Modal,
   TextInput,
-  Alert,
+  Image,
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 
@@ -37,12 +37,15 @@ interface Props {
     status: string,
     paymentMethod?: string
   ) => void;
+  onPress?: () => void;
+
 }
 
 export const OrderCard: React.FC<Props> = ({
   order,
   userRole,
   updateOrderStatus,
+  onPress,
 }) => {
   const [showAll, setShowAll] = useState(false);
   const [itemsState, setItemsState] = useState(order.items);
@@ -63,31 +66,44 @@ export const OrderCard: React.FC<Props> = ({
     setItemsState((prev) =>
       prev.map((i) => (i._id === id ? { ...i, done: !i.done } : i))
     );
+
+    // Notify parent to update order status
+    const allDone = itemsState.every((i) => i._id === id ? !i.done : i.done);
+    if (allDone) {
+      updateOrderStatus(order._id, "Ready"); // or whatever status you want
+    }
   };
+
 
   const handleCompletePress = () => setModalVisible(true);
 
-  const handlePayment = (method: "Cash" | "Online") => {
+  const handlePayment = (method: "Cash" | "Online" | "Complete") => {
     if (method === "Cash") {
       setPaymentType("Cash");
       setCashAmount("");
       setError("");
-    } else {
-      // Online or Complete button
-      if (paymentType === "Cash") {
-        // Check if entered amount matches total
-        if (Number(cashAmount) !== order.totalAmount) {
-          setError("Entered amount must equal total amount!");
-          return;
-        }
+    } else if (method === "Online") {
+      setPaymentType("Online");
+    } else if (method === "Complete") {
+      // Validate Cash
+      if (paymentType === "Cash" && Number(cashAmount) !== order.totalAmount) {
+        setError("Entered amount must equal total amount!");
+        return;
       }
-      updateOrderStatus(order._id, "Completed", method);
+      updateOrderStatus(order._id, "Completed", paymentType || "Cash");
       setModalVisible(false);
+      setPaymentType(null);
+      setCashAmount("");
+      setError("");
     }
   };
 
   return (
-    <View style={styles.card}>
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={onPress} // call the onPress passed from parent
+      style={styles.card}
+    >
       {userRole === "cook" && order.status === "Preparing" && (
         <View style={styles.progressContainer}>
           <View
@@ -159,60 +175,129 @@ export const OrderCard: React.FC<Props> = ({
         visible={modalVisible}
         transparent
         animationType="fade"
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={() => {
+          setModalVisible(false);
+          setPaymentType(null);
+          setCashAmount("");
+          setError("");
+        }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
+            {/* Close Button */}
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => {
+                setModalVisible(false);
+                setPaymentType(null);
+                setCashAmount("");
+                setError("");
+              }}
+            >
+              <Ionicons name="close" size={28} color="#ff0800ff" />
+            </TouchableOpacity>
+
             <Text style={styles.modalTitle}>Confirm Payment</Text>
             <Text style={styles.modalMessage}>
               Order #{order.orderNumber} - ₹{order.totalAmount}
             </Text>
 
+            {/* Payment Type Buttons */}
+            <View style={styles.paymentButtons}>
+              <TouchableOpacity
+                style={[
+                  styles.payButton,
+                  { backgroundColor: paymentType === "Cash" ? "#FFD700" : "#222" },
+                ]}
+                onPress={() => {
+                  setPaymentType("Cash");
+                  setCashAmount("");
+                  setError("");
+                }}
+              >
+                <Text
+                  style={[
+                    styles.payButtonText,
+                    { color: paymentType === "Cash" ? "#111" : "#FFD700" },
+                  ]}
+                >
+                  Cash
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.payButton,
+                  { backgroundColor: paymentType === "Online" ? "#FFD700" : "#222" },
+                ]}
+                onPress={() => {
+                  setPaymentType("Online");
+                  setCashAmount("");
+                  setError("");
+                }}
+              >
+                <Text
+                  style={[
+                    styles.payButtonText,
+                    { color: paymentType === "Online" ? "#111" : "#FFD700" },
+                  ]}
+                >
+                  Online
+                </Text>
+              </TouchableOpacity>
+            </View>
+
             {/* Cash Input */}
             {paymentType === "Cash" && (
-              <View style={{ width: "100%", marginBottom: 12 }}>
-                <Text style={{ color: "#FFD700", fontWeight: "700", marginBottom: 6 }}>
-                  Enter amount
-                </Text>
+              <View style={{ width: "100%", marginVertical: 16 }}>
+                <Text style={styles.label}>Enter amount</Text>
                 <TextInput
                   placeholder="Enter amount"
                   placeholderTextColor="#888"
                   keyboardType="numeric"
                   value={cashAmount}
-                  onChangeText={(text) => setCashAmount(text)}
+                  onChangeText={setCashAmount}
                   style={styles.cashInput}
                 />
                 {error ? <Text style={styles.errorText}>{error}</Text> : null}
               </View>
             )}
 
-            <View style={styles.paymentButtons}>
-              <TouchableOpacity
-                style={[
-                  styles.payButton,
-                  { backgroundColor: paymentType === "Cash" ? "#FFD700" : "#FFD700" },
-                ]}
-                onPress={() => handlePayment("Cash")}
-              >
-                <Text style={styles.payButtonText}>Cash</Text>
-              </TouchableOpacity>
+            {/* Online QR */}
+            {paymentType === "Online" && (
+              <View style={{ alignItems: "center", marginVertical: 16 }}>
+                <View style={styles.qrContainer}>
+                  <Image
+                    source={require("../../../assets/images/cleaned_qr.png")}
+                    style={styles.qrImage}
+                  />
+                </View>
+                <Text style={styles.qrLabel}>Scan to Pay</Text>
+              </View>
+            )}
 
-              <TouchableOpacity
-                style={[
-                  styles.payButton,
-                  { backgroundColor: paymentType === "Cash" ? "#4CAF50" : "#4CAF50" },
-                ]}
-                onPress={() => handlePayment(paymentType === "Cash" ? "Complete" : "Online")}
-              >
-                <Text style={styles.payButtonText}>
-                  {paymentType === "Cash" ? "Complete" : "Online"}
-                </Text>
-              </TouchableOpacity>
-            </View>
+            {/* Complete Button */}
+            <TouchableOpacity
+              style={[styles.completeButton, { marginTop: 10 }]}
+              activeOpacity={0.85}
+              onPress={() => {
+                if (paymentType === "Cash" && Number(cashAmount) !== order.totalAmount) {
+                  setError("Entered amount must equal total amount!");
+                  return;
+                }
+                updateOrderStatus(order._id, "Completed", paymentType || "Cash");
+                setModalVisible(false);
+                setPaymentType(null);
+                setCashAmount("");
+                setError("");
+              }}
+            >
+              <Text style={styles.completeButtonText}>Complete</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
-    </View>
+    </TouchableOpacity>
   );
 };
 
@@ -244,25 +329,105 @@ const styles = StyleSheet.create({
   moreButton: { alignSelf: "center", paddingVertical: 6, paddingHorizontal: 14, borderRadius: 14, backgroundColor: "rgba(255,215,0,0.15)", marginVertical: 6 },
   moreButtonText: { color: "#FFD700", fontWeight: "600", fontSize: 13 },
   total: { marginTop: 6, fontSize: 16, fontWeight: "700", color: "#FFD700", textAlign: "right" },
-  completeButton: { marginTop: "auto", alignSelf: "stretch", backgroundColor: "#4CAF50", paddingVertical: 10, borderRadius: 22, shadowColor: "#4CAF50", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 6, elevation: 6 },
-  completeButtonText: { color: "#fff", fontWeight: "800", fontSize: 15, textAlign: "center", letterSpacing: 0.6 },
-
   // Modal
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center" },
-  modalContainer: { width: "80%", backgroundColor: "#111", borderRadius: 20, padding: 24, borderWidth: 1, borderColor: "#FFD700", alignItems: "center" },
-  modalTitle: { fontSize: 22, fontWeight: "800", color: "#FFD700", marginBottom: 12 },
-  modalMessage: { fontSize: 16, color: "#fff", marginBottom: 20, textAlign: "center" },
-  paymentButtons: { flexDirection: "row", justifyContent: "space-between", width: "100%" },
-  payButton: { flex: 1, paddingVertical: 12, borderRadius: 14, marginHorizontal: 6 },
-  payButtonText: { color: "#111", fontWeight: "700", fontSize: 16, textAlign: "center" },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContainer: {
+    width: "85%",
+    backgroundColor: "#111",
+    borderRadius: 20,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: "#FFD700",
+    alignItems: "center",
+    position: "relative",
+  },
+  modalCloseButton: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    zIndex: 10,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#FFD700",
+    marginBottom: 12,
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: "#fff",
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  paymentButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    width: "100%",
+    marginBottom: 16,
+  },
+  payButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    marginHorizontal: 6,
+  },
+  payButtonText: {
+    fontSize: 16,
+    fontWeight: "700",
+    textAlign: "center",
+  },
   cashInput: {
     backgroundColor: "rgba(255,215,0,0.1)",
     color: "#fff",
     borderRadius: 12,
     paddingHorizontal: 12,
-    height: 44,
+    height: 48,
     borderWidth: 1,
     borderColor: "#FFD700",
+    fontSize: 16,
+  },
+  label: {
+    color: "#FFD700",
+    fontWeight: "700",
+    marginBottom: 6,
+    fontSize: 14,
   },
   errorText: { color: "#FF5252", marginTop: 6, fontWeight: "600" },
+  qrContainer: {
+    width: 260,
+    height: 260,
+    borderWidth: 4,
+    borderColor: "#FFD700",
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: "#FFD700",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+  },
+  qrImage: { width: "100%", height: "100%", resizeMode: "contain" },
+  qrLabel: {
+    color: "#FFD700",
+    fontSize: 18,
+    fontWeight: "700",
+    marginTop: 12,
+  },
+  completeButton: {
+    alignSelf: "stretch",
+    backgroundColor: "#4CAF50",
+    paddingVertical: 14,
+    borderRadius: 22,
+    shadowColor: "#4CAF50",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  completeButtonText: { color: "#fff", fontWeight: "800", fontSize: 16, textAlign: "center" },
+
 });

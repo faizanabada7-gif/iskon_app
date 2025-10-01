@@ -7,7 +7,7 @@ import { createNativeStackNavigator, NativeStackScreenProps } from "@react-navig
 import UltraLuxuryLoginScreen from "./src/screens/auth/LoginScreen";
 import WelcomeScreen from "./src/screens/welcome/WelcomeScreen";
 import AddOrderScreen from "./src/screens/order/addOrder/AddOrderScreen";
-
+import ViewOrderScreen from './src/screens/order/viewOrder/ViewOrderScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -68,6 +68,12 @@ export default function App() {
           name="AddOrder"
         >
           {(props) => <AddOrderScreen {...props} />}
+        </Stack.Screen>
+
+        <Stack.Screen
+          name="ViewOrder"
+        >
+          {(props) => <ViewOrderScreen {...props} />}
         </Stack.Screen>
       </Stack.Navigator>
 

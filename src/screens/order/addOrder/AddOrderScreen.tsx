@@ -16,9 +16,11 @@ import socket from "../../../socket/socket";
 type MenuItem = { _id: string; itemName: string; price: number };
 type SelectedItem = MenuItem & { quantity: number };
 
-type AddOrderScreenProps = { navigation: any };
+type AddOrderScreenProps = { navigation: any; route: any , onOrderUpdated?: () => Promise<void>;};
 
-const AddOrderScreen: React.FC<AddOrderScreenProps> = ({ navigation }) => {
+const AddOrderScreen: React.FC<AddOrderScreenProps> = ({ navigation, route }) => {
+  const { editable = false, order,onOrderUpdated } = route.params || {}; // 👈 get params
+
   const [items, setItems] = useState<MenuItem[]>([]);
   const [filteredItems, setFilteredItems] = useState<MenuItem[]>([]);
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
@@ -27,17 +29,34 @@ const AddOrderScreen: React.FC<AddOrderScreenProps> = ({ navigation }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const selectedListRef = useRef<FlatList>(null);
 
+  // Load token
   useEffect(() => {
     AsyncStorage.getItem("token").then((t) => {
       if (t) setToken(t);
     });
   }, []);
 
+  // Fetch menu items
   useEffect(() => {
     if (!token) return;
     fetchItems();
   }, [token]);
 
+  // Setup editing mode
+  useEffect(() => {
+    if (editable && order) {
+      const mapped = order.items.map((it: any) => ({
+        _id: it.itemId || it._id,
+        itemName: it.name || it.itemName,
+        price: it.price,
+        quantity: it.quantity,
+      }));
+      setSelectedItems(mapped);
+      setTotalAmount(order.totalAmount || 0);
+    }
+  }, [editable, order]);
+
+  // Search filter
   useEffect(() => {
     if (!searchTerm) setFilteredItems(items);
     else
@@ -48,6 +67,7 @@ const AddOrderScreen: React.FC<AddOrderScreenProps> = ({ navigation }) => {
       );
   }, [searchTerm, items]);
 
+  // Fetch menu items
   const fetchItems = async () => {
     try {
       const res = await getCategoryWiseMenu({}, token);
@@ -58,6 +78,7 @@ const AddOrderScreen: React.FC<AddOrderScreenProps> = ({ navigation }) => {
     }
   };
 
+  // Add item to selected list
   const handleAddItem = (item: MenuItem) => {
     setSelectedItems((prev) => {
       const exist = prev.find((i) => i._id === item._id);
@@ -69,10 +90,10 @@ const AddOrderScreen: React.FC<AddOrderScreenProps> = ({ navigation }) => {
     });
     setTotalAmount((prev) => prev + item.price);
 
-    // Auto-scroll to end
     setTimeout(() => selectedListRef.current?.scrollToEnd({ animated: true }), 100);
   };
 
+  // Remove item
   const handleRemoveItem = (item: SelectedItem) => {
     setSelectedItems((prev) => {
       if (item.quantity > 1)
@@ -84,50 +105,51 @@ const AddOrderScreen: React.FC<AddOrderScreenProps> = ({ navigation }) => {
     setTotalAmount((prev) => prev - item.price);
   };
 
-  const handleSaveOrder = async () => {
-    if (selectedItems.length === 0) return console.log("Add items first");
-const userId = await AsyncStorage.getItem("userId");
-console.log("👉 userId:", userId);
+  // Save or update order
+const handleSaveOrder = async () => {
+  if (selectedItems.length === 0) return;
 
-       const allKeys = await AsyncStorage.getAllKeys();
-    console.log("📦 All AsyncStorage keys:", userId);
+  const userId = await AsyncStorage.getItem("userId");
+  if (!userId) return;
 
-    if (!userId) {
-      console.log("No user ID found in storage");
-      return;
-    }
+  const payload = {
+    userId,
+    items: selectedItems.map((i) => ({
+      itemId: i._id,
+      name: i.itemName,
+      price: i.price,
+      quantity: i.quantity,
+    })),
+    totalAmount,
+  };
 
-    const payload = {
-      userId,
-      items: selectedItems.map((i) => ({
-        itemId: i._id,
-        name: i.itemName,
-        price: i.price,
-        quantity: i.quantity,
-      })),
-      totalAmount,
-      note: "",
-    };
-    try {
-      const res = await API.post("/orders", payload, {
+  try {
+    let res;
+    if (editable && order?._id) {
+      res = await API.put(`/orders/order/${order._id}`, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.data.success) {
-        socket.emit("createOrder", res.data.data);
-        setSelectedItems([]);
-        setTotalAmount(0);
-        navigation.goBack();
-      } else console.log(res.data.message || "Failed to create order");
-    } catch (err: any) {
-      console.log("Error creating order:", err);
+    } else {
+      res = await API.post("/orders", payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
     }
-  };
+
+    if (res.data.success) {
+      // ✅ Call the parent callback
+      if (onOrderUpdated) await onOrderUpdated(); 
+      navigation.goBack();
+    }
+  } catch (err) {
+    console.log(err);
+  }
+};
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.headerContainer}>
-        <Text style={styles.title}>Orders</Text>
+        <Text style={styles.title}>{editable ? "Edit Order" : "Create Order"}</Text>
         <View style={styles.searchWrap}>
           <Ionicons name="search-outline" size={18} color="#777" style={{ marginRight: 8 }} />
           <TextInput
@@ -185,7 +207,7 @@ console.log("👉 userId:", userId);
 
       {/* Save Button */}
       <TouchableOpacity style={styles.saveButton} onPress={handleSaveOrder}>
-        <Text style={styles.saveButtonText}>Save Order</Text>
+        <Text style={styles.saveButtonText}>{editable ? "Update Order" : "Save Order"}</Text>
         <Ionicons name="checkmark-done-outline" size={22} color="#000" style={{ marginLeft: 8 }} />
       </TouchableOpacity>
     </View>

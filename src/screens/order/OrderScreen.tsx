@@ -5,9 +5,7 @@ import {
   FlatList,
   SafeAreaView,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
-  ScrollView,
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -33,6 +31,7 @@ interface Order {
   totalAmount: number;
   status: string;
 }
+
 interface GroupedOrders {
   Preparing: Order[];
   Ready: Order[];
@@ -40,7 +39,12 @@ interface GroupedOrders {
   Cancelled: Order[];
 }
 
-const statusTabs: (keyof GroupedOrders)[] = ["Preparing", "Ready", "Completed", "Cancelled"];
+const statusTabs: (keyof GroupedOrders)[] = [
+  "Preparing",
+  "Ready",
+  "Completed",
+  "Cancelled",
+];
 
 export default function OrdersScreen() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -56,14 +60,19 @@ export default function OrdersScreen() {
 
   const navigation = useNavigation();
 
+  // Get icon for tab
   const getStatusIcon = (status: keyof GroupedOrders) =>
-    status === "Preparing" ? "restaurant-outline" :
-      status === "Ready" ? "people-outline" :
-        status === "Completed" ? "checkmark-done-circle-outline" :
-          status === "Cancelled" ? "close-circle-outline" :
-            "help-circle-outline";
+    status === "Preparing"
+      ? "restaurant-outline"
+      : status === "Ready"
+        ? "people-outline"
+        : status === "Completed"
+          ? "checkmark-done-circle-outline"
+          : status === "Cancelled"
+            ? "close-circle-outline"
+            : "help-circle-outline";
 
-  // Fetch user data
+  // Fetch user info
   useEffect(() => {
     const fetchUser = async () => {
       const stored = await AsyncStorage.getItem("user");
@@ -76,6 +85,7 @@ export default function OrdersScreen() {
     fetchUser();
   }, []);
 
+  // Fetch orders from API
   const fetchOrders = async () => {
     if (!userId) return;
     const token = await AsyncStorage.getItem("token");
@@ -95,7 +105,7 @@ export default function OrdersScreen() {
   // Group orders by status
   const groupOrdersByStatus = (list: Order[]) => {
     const g: GroupedOrders = { Preparing: [], Ready: [], Completed: [], Cancelled: [] };
-    list.forEach(o => {
+    list.forEach((o) => {
       const s = o.status?.toLowerCase();
       if (s === "ready") g.Ready.push(o);
       else if (s === "completed") g.Completed.push(o);
@@ -105,9 +115,27 @@ export default function OrdersScreen() {
     setGroupedOrders(g);
   };
 
-  // Refresh orders on mount and screen focus
-  useEffect(() => { if (userId) fetchOrders(); }, [userId]);
-  useFocusEffect(useCallback(() => { fetchOrders(); }, [userId]));
+  // Update order status locally and refresh groupedOrders
+  const handleUpdateOrderStatus = (id: string, newStatus: string) => {
+    setOrders((prev) => {
+      const updated = prev.map((o) => (o._id === id ? { ...o, status: newStatus } : o));
+      groupOrdersByStatus(updated); // update groupedOrders
+      return updated;
+    });
+  };
+
+  // Refresh orders on mount and when screen focuses
+  useEffect(() => {
+    if (userId) fetchOrders();
+  }, [userId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (userId) fetchOrders();
+    }, [userId])
+  );
+
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -118,16 +146,22 @@ export default function OrdersScreen() {
           <TouchableOpacity
             style={styles.addButton}
             activeOpacity={0.85}
-            onPress={() => navigation.navigate("AddOrder")}
+            onPress={() =>
+              navigation.navigate("AddOrder", {
+                editable: false,   // creating new order
+                onOrderUpdated: fetchOrders,
+              })
+            }
           >
             <Text style={styles.addButtonText}>+ New</Text>
           </TouchableOpacity>
+
         )}
       </View>
 
       {/* Tabs */}
       <View style={styles.tabsWrapper}>
-        {statusTabs.map(tab => {
+        {statusTabs.map((tab) => {
           const isActive = activeTab === tab;
           return (
             <TouchableOpacity
@@ -154,33 +188,40 @@ export default function OrdersScreen() {
         <FlatList
           data={groupedOrders[activeTab]}
           keyExtractor={(o) => o._id}
-          showsVerticalScrollIndicator={false}
-          ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
+          extraData={groupedOrders[activeTab]} // force re-render when items change
           renderItem={({ item }) => (
             <OrderCard
+              key={item._id + item.totalAmount}
               order={item}
               userRole={userRole}
-              updateOrderStatus={(id, newStatus) =>
-                setOrders(prev =>
-                  prev.map(o => (o._id === id ? { ...o, status: newStatus } : o))
-                )
+              updateOrderStatus={handleUpdateOrderStatus}
+              onPress={() =>
+                navigation.navigate("AddOrder", {
+                  editable: true,
+                  order: item,
+                  onOrderUpdated: fetchOrders,
+                })
               }
             />
           )}
-          contentContainerStyle={{ paddingVertical: 16 }}
         />
+
       </View>
     </SafeAreaView>
   );
 }
 
-// Styles
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 18 },
   headerTitle: {
-    fontSize: 32, fontWeight: "900", color: "#FFD700", letterSpacing: 1.2,
-    textShadowColor: "rgba(255,215,0,0.3)", textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 6,
+    fontSize: 32,
+    fontWeight: "900",
+    color: "#FFD700",
+    letterSpacing: 1.2,
+    textShadowColor: "rgba(255,215,0,0.3)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
   },
   addButton: { backgroundColor: "#FFD700", paddingVertical: 8, paddingHorizontal: 20, borderRadius: 30, elevation: 4 },
   addButtonText: { color: "#111", fontWeight: "700", fontSize: 16 },
