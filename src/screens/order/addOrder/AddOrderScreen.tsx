@@ -86,7 +86,19 @@ const AddOrderScreen: React.FC<AddOrderScreenProps> = ({ navigation }) => {
 
   const handleSaveOrder = async () => {
     if (selectedItems.length === 0) return console.log("Add items first");
+const userId = await AsyncStorage.getItem("userId");
+console.log("👉 userId:", userId);
+
+       const allKeys = await AsyncStorage.getAllKeys();
+    console.log("📦 All AsyncStorage keys:", userId);
+
+    if (!userId) {
+      console.log("No user ID found in storage");
+      return;
+    }
+
     const payload = {
+      userId,
       items: selectedItems.map((i) => ({
         itemId: i._id,
         name: i.itemName,
