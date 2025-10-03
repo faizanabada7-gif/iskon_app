@@ -18,7 +18,7 @@ interface Props {
 }
 
 export default function CategoryCard({ category, onEdit, onDelete, onClick, cardWidth }: Props) {
-  const LOCAL_IP = "192.168.1.44"; // your computer LAN IP
+  const LOCAL_IP = "192.168.1.47"; // your computer LAN IP
   const imageUri = category.image?.startsWith("http")
     ? category.image
     : `http://${LOCAL_IP}:5000${category.image}`;

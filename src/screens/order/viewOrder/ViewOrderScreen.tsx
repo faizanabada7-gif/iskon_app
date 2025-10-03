@@ -40,7 +40,6 @@ const ViewOrderScreen: React.FC<ViewOrderScreenProps> = ({ route, navigation }) 
 
     const fetchOrder = async () => {
         try {
-            console.log("orderId >>>", orderId, "type:", typeof orderId);
             const res = await API.get(`/orders/order/${orderId}`, {
                 headers: { Authorization: `Bearer ${token}` },
             });

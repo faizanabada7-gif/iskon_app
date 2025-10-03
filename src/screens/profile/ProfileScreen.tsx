@@ -42,12 +42,10 @@ export default function ProfileScreen() {
       try {
         const token = await AsyncStorage.getItem("token");
 
-        console.log("userId",userId)
         const userId = await AsyncStorage.getItem("userId");
         if (!userId) return;
 
         const res = await getUserById(userId, token);
-        console.log("Res",res)
         if (res?.data?.success) {
           const u = res.data.data;
           setUser({

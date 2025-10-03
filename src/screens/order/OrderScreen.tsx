@@ -22,9 +22,16 @@ interface OrderItem {
   price: number;
   quantity: number;
   done?: boolean;
+  waiterName?: string;       // 👈 added
+  orderTime?: string;        // 👈 added
+  orderDate?: string;        // 👈 optional if needed
+  lastUpdated?: string;      // 👈 added
 }
 
 interface Order {
+  placedBy: any;
+  createdAt: string | number | Date;
+  updatedAt: string | number | Date;
   _id: string;
   orderNumber: number;
   items: OrderItem[];
@@ -33,44 +40,36 @@ interface Order {
 }
 
 interface GroupedOrders {
-  Preparing: Order[];
-  Ready: Order[];
+  Current: Order[];
   Completed: Order[];
   Cancelled: Order[];
 }
 
-const statusTabs: (keyof GroupedOrders)[] = [
-  "Preparing",
-  "Ready",
-  "Completed",
-  "Cancelled",
-];
+const statusTabs: (keyof GroupedOrders)[] = ["Current", "Completed", "Cancelled"];
 
 export default function OrdersScreen() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [groupedOrders, setGroupedOrders] = useState<GroupedOrders>({
-    Preparing: [],
-    Ready: [],
+    Current: [],
     Completed: [],
     Cancelled: [],
   });
   const [userRole, setUserRole] = useState<UserRole>("waiter");
   const [userId, setUserId] = useState<string>("");
-  const [activeTab, setActiveTab] = useState<keyof GroupedOrders>("Preparing");
+  const [activeTab, setActiveTab] = useState<keyof GroupedOrders>("Current");
 
   const navigation = useNavigation();
 
   // Get icon for tab
   const getStatusIcon = (status: keyof GroupedOrders) =>
-    status === "Preparing"
+    status === "Current"
       ? "restaurant-outline"
-      : status === "Ready"
-        ? "people-outline"
-        : status === "Completed"
-          ? "checkmark-done-circle-outline"
-          : status === "Cancelled"
-            ? "close-circle-outline"
-            : "help-circle-outline";
+      : status === "Completed"
+        ? "checkmark-done-circle-outline"
+        : status === "Cancelled"
+          ? "close-circle-outline"
+          : "help-circle-outline";
+
 
   // Fetch user info
   useEffect(() => {
@@ -104,13 +103,12 @@ export default function OrdersScreen() {
 
   // Group orders by status
   const groupOrdersByStatus = (list: Order[]) => {
-    const g: GroupedOrders = { Preparing: [], Ready: [], Completed: [], Cancelled: [] };
+    const g: GroupedOrders = { Current: [], Completed: [], Cancelled: [] };
     list.forEach((o) => {
       const s = o.status?.toLowerCase();
-      if (s === "ready") g.Ready.push(o);
-      else if (s === "completed") g.Completed.push(o);
+      if (s === "completed") g.Completed.push(o);
       else if (s === "cancelled") g.Cancelled.push(o);
-      else g.Preparing.push(o);
+      else g.Current.push(o); // everything else
     });
     setGroupedOrders(g);
   };
@@ -135,7 +133,42 @@ export default function OrdersScreen() {
     }, [userId])
   );
 
+  const formattedOrders = orders.map(o => ({
+    ...o,
+    waiterName: o.placedBy?.username || "Unknown",
+    orderTime: new Date(o.createdAt).toLocaleTimeString("en-IN", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    orderDate: new Date(o.createdAt).toLocaleDateString("en-IN", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    }),
+    lastUpdated: new Date(o.updatedAt).toLocaleString("en-IN", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+  }));
 
+const groupOrdersByDate = (orders: Order[]) => {
+  return orders.reduce<Record<string, Order[]>>((acc, order) => {
+    const date = new Date(order.createdAt).toLocaleDateString("en-IN", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+    if (!acc[date]) acc[date] = [];
+    acc[date].push(order);
+    return acc;
+  }, {});
+};
+
+
+  
 
   return (
     <SafeAreaView style={styles.container}>
@@ -148,14 +181,13 @@ export default function OrdersScreen() {
             activeOpacity={0.85}
             onPress={() =>
               navigation.navigate("AddOrder", {
-                editable: false,   // creating new order
+                editable: false,   // creating new order 
                 onOrderUpdated: fetchOrders,
               })
             }
           >
             <Text style={styles.addButtonText}>+ New</Text>
           </TouchableOpacity>
-
         )}
       </View>
 
@@ -183,30 +215,40 @@ export default function OrdersScreen() {
         })}
       </View>
 
-      {/* Orders List */}
-      <View style={{ flex: 1, paddingHorizontal: 16 }}>
-        <FlatList
-          data={groupedOrders[activeTab]}
-          keyExtractor={(o) => o._id}
-          extraData={groupedOrders[activeTab]} // force re-render when items change
-          renderItem={({ item }) => (
+   <View style={{ flex: 1, paddingHorizontal: 16 }}>
+  <FlatList
+    data={Object.entries(groupOrdersByDate(groupedOrders[activeTab]))}
+    keyExtractor={([date]) => date}
+    renderItem={({ item }) => {
+      const [date, ordersForDate] = item;
+      return (
+        <View style={{ marginBottom: 20 }}>
+          {/* Date Header */}
+          <Text style={styles.dateHeader}>{date}</Text>
+
+          {/* Orders for this date */}
+          {ordersForDate.map((order) => (
             <OrderCard
-              key={item._id + item.totalAmount}
-              order={item}
+              key={order._id + order.totalAmount}
+              order={order}
               userRole={userRole}
               updateOrderStatus={handleUpdateOrderStatus}
               onPress={() =>
                 navigation.navigate("AddOrder", {
                   editable: true,
-                  order: item,
+                  order,
                   onOrderUpdated: fetchOrders,
                 })
               }
             />
-          )}
-        />
+          ))}
+        </View>
+      );
+    }}
+  />
+</View>
 
-      </View>
+
     </SafeAreaView>
   );
 }
@@ -261,4 +303,11 @@ const styles = StyleSheet.create({
   },
   tabLabel: { fontSize: 10, fontWeight: "700", color: "#FFD700", marginTop: 4 },
   tabLabelActive: { color: "#111" },
+  dateHeader: {
+  fontSize: 18,
+  fontWeight: "700",
+  color: "#FFD700",
+  marginVertical: 8,
+}
+
 });

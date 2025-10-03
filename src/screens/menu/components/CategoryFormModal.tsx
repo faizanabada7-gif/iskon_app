@@ -31,7 +31,7 @@ export default function CategoryFormModal({ visible, onClose, editingCategory, r
 
   useEffect(() => {
     if (editingCategory?.image) {
-      setPreviewImage(`http://192.168.1.44:5000${editingCategory.image}`);
+      setPreviewImage(`http://192.168.1.47:5000${editingCategory.image}`);
     } else {
       setPreviewImage(null);
     }
