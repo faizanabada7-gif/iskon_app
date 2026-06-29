@@ -97,7 +97,6 @@ const AddOrderScreen: React.FC<Props> = ({ navigation, route }) => {
     }
   };
 
-  /* ---------------- FETCH ITEMS ---------------- */
   const handleSelectCategory = async (cat: Category) => {
     setSelectedCategory(cat);
     setLoadingItems(true);
